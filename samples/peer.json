@@ -1,0 +1,39 @@
+[
+  [
+    "POST",
+    "/sessions/S12/stop",
+    {},
+    [
+      [
+        0,
+        {}
+      ]
+    ]
+  ],
+  [
+    "GET",
+    "/sessions/S12",
+    null,
+    [
+      [
+        200,
+        {
+          "status": "charging",
+          "port": "C1",
+          "vin": "V12",
+          "authorized_kw": 12
+        }
+      ],
+      [
+        200,
+        {
+          "status": "stopped",
+          "port": "C1",
+          "vin": "V12",
+          "authorized_kw": 12,
+          "at": "2026-11-27T01:42:00Z"
+        }
+      ]
+    ]
+  ]
+]

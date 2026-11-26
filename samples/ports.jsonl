@@ -1,0 +1,4 @@
+{"port": "C1", "connector": "CCS", "bank": "G", "max_kw": 12, "bank_kw": 18}
+{"port": "C2", "connector": "CCS", "bank": "G", "max_kw": 12, "bank_kw": 18}
+{"port": "C3", "connector": "GBT", "bank": "G", "max_kw": 12, "bank_kw": 18}
+{"port": "C4", "connector": "GBT", "bank": "H", "max_kw": 8, "bank_kw": 8}

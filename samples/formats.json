@@ -1,0 +1,99 @@
+{
+  "feeds": {
+    "ports": {
+      "key": [
+        "port"
+      ],
+      "fields": {
+        "port": "string",
+        "connector": "string",
+        "bank": "string",
+        "max_kw": "int",
+        "bank_kw": "int"
+      },
+      "note": "bank_kw 是对应供电组可同时输出的上限。max_kw 是端口上限。"
+    },
+    "fleets": {
+      "key": [
+        "booking",
+        "vin"
+      ],
+      "fields": {
+        "booking": "string",
+        "vin": "string",
+        "connector": "string",
+        "ready": "time",
+        "handoff": "time",
+        "initial_wh": "int",
+        "minimum_wh": "int",
+        "interruptible": "bool",
+        "fen_per_kwh": "int"
+      },
+      "note": "同 booking 默认整车队一起交，变更需得到买方确认。能量以 Wh 计，费率为人民币分每千瓦时。"
+    },
+    "meter": {
+      "key": [
+        "event"
+      ],
+      "fields": {
+        "event": "string",
+        "session": "string",
+        "port": "string",
+        "vin": "string",
+        "occurred": "time",
+        "total_wh": "int",
+        "supersedes": "string"
+      },
+      "note": "total_wh 是会话累积实送电量。supersedes 指被更正的消息，空字符串是原记录。"
+    },
+    "active_sessions": {
+      "key": [
+        "session"
+      ],
+      "fields": {
+        "session": "string",
+        "port": "string",
+        "vin": "string",
+        "started_at": "time",
+        "authorized_kw": "int"
+      },
+      "note": "充电启动回执，结算需使用相同的会话标识；授权功率不是实际送电量。"
+    }
+  },
+  "references": [
+    [
+      "meter",
+      [
+        "port"
+      ],
+      "ports",
+      [
+        "port"
+      ]
+    ],
+    [
+      "meter",
+      [
+        "vin"
+      ],
+      "fleets",
+      [
+        "vin"
+      ]
+    ],
+    [
+      "meter",
+      [
+        "session",
+        "port",
+        "vin"
+      ],
+      "active_sessions",
+      [
+        "session",
+        "port",
+        "vin"
+      ]
+    ]
+  ]
+}

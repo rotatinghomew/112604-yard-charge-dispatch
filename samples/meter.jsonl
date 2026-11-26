@@ -1,0 +1,3 @@
+{"event": "E1", "session": "S12", "port": "C1", "vin": "V12", "occurred": "2026-11-27T01:35:00Z", "total_wh": 5000, "supersedes": ""}
+{"event": "E2", "session": "S12", "port": "C1", "vin": "V12", "occurred": "2026-11-27T01:42:00Z", "total_wh": 9200, "supersedes": ""}
+{"event": "E3", "session": "S12", "port": "C1", "vin": "V12", "occurred": "2026-11-27T01:42:00Z", "total_wh": 8600, "supersedes": "E2"}
