@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>库区充电换档与整组交车</title>
+  <style>
+    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK SC", sans-serif; }
+    body { margin: 0; background: #f5f7fb; color: #172033; }
+    header { background: #10233f; color: white; padding: 18px 24px; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    header h1 { font-size: 20px; margin: 0; }
+    main { padding: 20px; max-width: 1500px; margin: 0 auto; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 16px; }
+    .card { background: white; border: 1px solid #dce3ef; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(16,35,63,.06); }
+    .card h2 { margin: 0 0 12px; font-size: 17px; }
+    .card h3 { font-size: 14px; margin: 14px 0 6px; }
+    label { display: block; font-size: 12px; color: #5c6b82; margin: 8px 0 4px; }
+    input, textarea, select { width: 100%; box-sizing: border-box; border: 1px solid #c8d2e2; border-radius: 8px; padding: 8px; font: inherit; }
+    textarea { min-height: 130px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    button { border: 0; border-radius: 8px; background: #1d5fd1; color: white; padding: 8px 12px; cursor: pointer; margin: 4px 4px 4px 0; }
+    button.secondary { background: #e8eefb; color: #174a9e; }
+    button.danger { background: #b42318; }
+    button.success { background: #067647; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .pill { display: inline-block; border-radius: 999px; padding: 2px 8px; font-size: 12px; margin: 2px; background: #eef2f8; }
+    .pill.ok { background: #dcfae6; color: #067647; }
+    .pill.warn { background: #fef0c7; color: #93370d; }
+    .pill.bad { background: #fee4e2; color: #b42318; }
+    pre { background: #0b1220; color: #d7e3ff; padding: 12px; border-radius: 8px; overflow: auto; max-height: 360px; font-size: 12px; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { border-bottom: 1px solid #e6ebf4; padding: 7px 5px; text-align: left; vertical-align: top; }
+    th { color: #667085; font-weight: 600; }
+    .muted { color: #667085; font-size: 12px; }
+    #message { position: sticky; top: 8px; z-index: 2; }
+    .toast { padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; background: #ecfdf3; border: 1px solid #abefc6; color: #067647; }
+    .toast.error { background: #fef3f2; border-color: #fda29b; color: #b42318; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; }
+    .row > div { flex: 1; min-width: 130px; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>库区充电换档 · 整组移交 · 计量结算</h1>
+  <label style="color:#c9d6ee;margin:0;">服务时钟 at <input id="at" style="width:230px" value="2026-11-27T01:42:00Z"></label>
+  <button onclick="refresh()">刷新总览</button>
+  <span class="muted" style="color:#c9d6ee">未确认停止的桩仍占用 VIN、端口和供电组容量</span>
+</header>
+<main>
+  <div id="message"></div>
+  <div class="grid">
+    <section class="card" id="capacity-card"><h2>供电组与桩端值班</h2><div id="capacity">加载中…</div></section>
+    <section class="card" id="handoff-card"><h2>车队调度 / 整组交车</h2><div id="handoff">加载中…</div></section>
+    <section class="card" id="finance-card"><h2>财务、计量与现场确认</h2><div id="finance">加载中…</div></section>
+    <section class="card" id="reviews-card"><h2>送电不足复核</h2><div id="reviews">加载中…</div></section>
+
+    <section class="card">
+      <h2>报告急单 / 容量评估</h2>
+      <p class="muted">接受前同时核对已有承诺、实际计量、接口和供电组上限。</p>
+      <label>JSON 请求</label>
+      <textarea id="urgent-body">{
+  "at": "2026-11-27T01:42:00Z",
+  "orders": [{
+    "booking": "U-1",
+    "handoff": "2026-11-27T03:30:00Z",
+    "vehicles": [{
+      "vin": "U1", "connector": "CCS",
+      "ready": "2026-11-27T01:45:00Z",
+      "initial_wh": 20000, "minimum_wh": 40000,
+      "interruptible": true, "fen_per_kwh": 150
+    }]
+  }]
+}</textarea>
+      <button onclick="postJson('/api/urgent-orders','urgent-body','urgent-result')">报告并评估急单</button>
+      <button class="secondary" onclick="postJson('/api/capacity/assess','assess-body','urgent-result')">仅容量评估</button>
+      <textarea id="assess-body" style="min-height:70px">{"at":"2026-11-27T01:42:00Z","candidate_bookings":["C-10"]}</textarea>
+      <pre id="urgent-result">等待操作…</pre>
+    </section>
+
+    <section class="card">
+      <h2>提前出库 / 变更确认</h2>
+      <div class="row">
+        <div><label>booking</label><input id="change-booking" value="C-9"></div>
+        <div><label>新移交时间</label><input id="change-time" value="2026-11-27T03:00:00Z"></div>
+      </div>
+      <button onclick="requestChange()">评估换档</button>
+      <label>变更响应 / 确认参数</label>
+      <textarea id="change-result">等待评估…</textarea>
+      <button class="success" onclick="confirmLastChange('commit')">确认可兑现计划</button>
+      <button class="secondary" onclick="confirmLastChange('split')">凭买方确认拆组</button>
+      <button class="secondary" onclick="confirmLastChange('new_handoff')">确认改移交时间</button>
+    </section>
+
+    <section class="card">
+      <h2>派发作业 / 换桩</h2>
+      <label>派工 JSON</label>
+      <textarea id="dispatch-body">{
+  "at": "2026-11-27T01:42:00Z",
+  "assignments": [{
+    "vin": "V14", "port": "C2",
+    "start": "2026-11-27T01:43:00Z",
+    "end": "2026-11-27T02:30:00Z", "kw": 12
+  }]
+}</textarea>
+      <button onclick="postJson('/api/dispatch','dispatch-body','dispatch-result')">派发作业</button>
+      <button class="secondary" onclick="evaluatePlans()">评估全部计划</button>
+      <pre id="dispatch-result">等待操作…</pre>
+    </section>
+
+    <section class="card">
+      <h2>桩端开始 / 停机 / 计量消息</h2>
+      <label>消息 JSON（可直接 POST /api/pile/messages）</label>
+      <textarea id="pile-body">{
+  "type": "meter",
+  "message": {
+    "event": "E9", "session": "S12", "port": "C1", "vin": "V12",
+    "occurred": "2026-11-27T02:00:00Z",
+    "total_wh": 12000, "supersedes": ""
+  }
+}</textarea>
+      <button onclick="postJson('/api/pile/messages','pile-body','pile-result')">处理桩端消息</button>
+      <button class="secondary" onclick="stopS12()">请求停止 S12</button>
+      <button class="secondary" onclick="pollS12()">轮询 S12</button>
+      <pre id="pile-result">等待消息…</pre>
+    </section>
+
+    <section class="card">
+      <h2>收款 / 结算</h2>
+      <div class="row">
+        <div><label>VIN</label><input id="pay-vin" value="V12"></div>
+        <div><label>金额（分，或 full）</label><input id="pay-amount" value="1075"></div>
+      </div>
+      <button onclick="recordPayment()">登记收款</button>
+      <button class="success" onclick="markPaid()">标记订单已付（可带默认全额）</button>
+      <div class="row">
+        <div><label>会话结算</label><input id="settle-session" value="S12"></div>
+      </div>
+      <button onclick="settleSession()">结算会话</button>
+      <pre id="pay-result">财务操作结果…</pre>
+    </section>
+
+    <section class="card" style="grid-column: 1 / -1;">
+      <h2>通用 JSON API 工作台</h2>
+      <div class="row">
+        <div style="max-width:180px"><label>方法</label><select id="api-method"><option>POST</option><option>GET</option></select></div>
+        <div><label>路径</label><input id="api-path" value="/api/dashboard"></div>
+      </div>
+      <label>请求体（GET 可留空）</label>
+      <textarea id="api-body" style="min-height:80px">{}</textarea>
+      <button onclick="sendGeneric()">发送</button>
+      <pre id="generic-result">任意 /api 接口均可从这里调用。</pre>
+    </section>
+  </div>
+</main>
+
+<script>
+let lastChangeId = null;
+const at = () => document.getElementById('at').value || null;
+function msg(text, isError=false) {
+  document.getElementById('message').innerHTML = `<div class="toast ${isError?'error':''}">${text}</div>`;
+}
+async function request(path, options={}) {
+  if (options.body && typeof options.body !== 'string') options.body = JSON.stringify(options.body);
+  const response = await fetch(path, {headers:{'Content-Type':'application/json'}, ...options});
+  const text = await response.text();
+  let data; try { data = JSON.parse(text); } catch { data = text; }
+  if (!response.ok) throw data;
+  return data;
+}
+function pretty(value) { return JSON.stringify(value, null, 2); }
+async function postJson(path, bodyId, resultId) {
+  try {
+    const body = JSON.parse(document.getElementById(bodyId).value || '{}');
+    if (!body.at && at()) body.at = at();
+    const data = await request(path, {method:'POST', body});
+    document.getElementById(resultId).textContent = pretty(data);
+    msg('操作成功'); refresh();
+    return data;
+  } catch (e) {
+    document.getElementById(resultId).textContent = pretty(e);
+    msg(e.message || e.error || '操作失败', true);
+  }
+}
+function pill(text, cls='') { return `<span class="pill ${cls}">${text}</span>`; }
+function classificationPill(c) {
+  const map = {
+    original_plan_kept: ['ok','原方案可继续'], original_plan_available: ['ok','原方案可兑现'],
+    split_requires_buyer: ['warn','待买方同意拆组'], handoff_time_change_required: ['bad','需改移交时间']
+  };
+  const [cls, zh] = map[c] || ['', c]; return pill(zh, cls);
+}
+async function refresh() {
+  const q = at() ? `?at=${encodeURIComponent(at())}` : '';
+  try {
+    const [dash, handoff, billing] = await Promise.all([
+      request('/api/dashboard'+q), request('/api/handoff'+q), request('/api/billing'+q)
+    ]);
+    renderCapacity(dash.capacity); renderHandoff(handoff); renderFinance(billing); renderReviews(dash.dispatch_reviews);
+  } catch (e) { msg('刷新失败：'+(e.message||e.error), true); }
+}
+function renderCapacity(capacity) {
+  let html = capacity.banks.map(b => `<h3>供电组 ${b.bank}：${b.used_kw}/${b.bank_kw} kW，可用 ${b.available_kw} kW${b.needs_confirmation_kw?pill('待确认 '+b.needs_confirmation_kw+' kW','warn'):''}</h3>
+    <table><tr><th>端口</th><th>接口</th><th>上限</th><th>状态</th><th>会话/操作</th></tr>` +
+    b.ports.map(p => `<tr><td>${p.port}</td><td>${p.connector}</td><td>${p.max_kw}kW</td><td>${p.status==='occupied'?pill('占用','bad'):pill('空闲','ok')}</td><td>${p.session?`${p.session.session} / ${p.session.vin} / ${p.session.control_state}<br><span class=muted>${p.session.pile_status||''} ${p.session.needs_field_confirmation?'需现场确认':''}</span>`:(p.job_id||'—')}</td></tr>`).join('') + `</table>`).join('');
+  html += '<h3>仍需现场确认的桩</h3>';
+  html += capacity.ports_needing_field_confirmation.length ? '<table>'+capacity.ports_needing_field_confirmation.map(x=>`<tr><td><b>${x.port}</b> / ${x.session} / ${x.vin}<br><span class=muted>${x.reasons.join('；')}</span></td></tr>`).join('')+'</table>' : '<span class=muted>无</span>';
+  document.getElementById('capacity').innerHTML = html;
+}
+function renderHandoff(data) {
+  document.getElementById('handoff').innerHTML = data.bookings.map(b => {
+    const rows = b.vehicles.map(v => `<tr><td>${v.vin}</td><td>${v.achieved_wh}/${v.minimum_wh} Wh</td><td>${v.requirement_met?pill('达标','ok'):pill('缺 '+v.remaining_wh+'Wh','bad')}</td><td>${v.remaining_minutes} 分${v.required_kw_by_deadline?`<br><span class=muted>需 ${v.required_kw_by_deadline}kW</span>`:''}</td></tr>`).join('');
+    return `<h3>${b.booking} ${b.collectable?pill('可整组领取','ok'):pill('不可整组兑现','bad')} <span class=muted>${b.agreement_mode==='whole'?'整车队约定':'拆组协议'}</span></h3>
+      <table><tr><th>VIN</th><th>电量</th><th>状态</th><th>剩余窗口</th></tr>${rows}</table>
+      <button class="success" onclick="collect('${b.booking}')">整组领车/装船</button>
+      ${(b.collectable_groups||[]).filter(g=>g.collectable).map(g=>`<button class="success" onclick="collectGroup('${b.booking}','${g.agreement_id}')">按协议领取 ${g.vins.join(', ')}</button>`).join('')}`;
+  }).join('') + `<p class=muted>${data.rule}</p>`;
+}
+async function collect(booking) {
+  try { const x=await request('/api/handoff/collect',{method:'POST',body:{booking,collected_by:'web',at:at()}}); msg('已办理 '+x.id); refresh(); }
+  catch(e){ msg(e.message||e.error,true); }
+}
+async function collectGroup(booking, agreementId) {
+  try { const x=await request('/api/handoff/collect',{method:'POST',body:{booking,agreement_id:agreementId,collected_by:'web',at:at()}}); msg('已办理拆组领取 '+x.id); refresh(); }
+  catch(e){ msg(e.message||e.error,true); }
+}
+function renderFinance(data) {
+  const rows = data.vehicles.map(v => `<tr><td><b>${v.vin}</b><br><span class=muted>${v.booking} · ${v.rate_fen_per_kwh}分/kWh</span></td><td>${v.metered_wh} Wh<br><span class=muted>${v.sessions.map(s=>s.session+':'+(s.accepted_total_wh??'无计量')+'Wh').join('<br>')}</span></td><td>应收 ${v.charge_fen} 分<br>已收 ${v.paid_fen} 分<br><b>余额 ${v.balance_fen} 分</b>${v.order_paid?pill('订单已付','ok'):''}</td><td>${v.sessions.flatMap(s=>s.why_pricing||[]).map(x=>`<div class=muted>• ${x}</div>`).join('')||'—'}</td></tr>`).join('');
+  const confirm = data.ports_needing_field_confirmation.map(x=>`<li><b>${x.port}</b> / ${x.session}：${x.reasons.join('；')}</li>`).join('');
+  document.getElementById('finance').innerHTML = `<p>总应收 ${data.totals.charge_fen} 分，已收 ${data.totals.paid_fen} 分，余额 ${data.totals.balance_fen} 分。</p><table><tr><th>车辆</th><th>有效累积电量</th><th>金额</th><th>为什么仍在计价</th></tr>${rows}</table><h3>哪台桩需现场确认</h3><ul>${confirm||'<li class=muted>无</li>'}</ul>`;
+}
+function renderReviews(reviews) {
+  const open = reviews.filter(r=>r.status==='awaiting_dispatch');
+  document.getElementById('reviews').innerHTML = open.length ? open.map(r=>`<h3>${r.vin} / ${r.booking} ${pill('未达标','bad')}</h3><p>缺 ${r.remaining_wh}Wh，剩余 ${r.remaining_minutes} 分钟，截止 ${r.deadline}，至少需 ${r.required_kw_by_deadline}kW。订单已付：${r.order_paid?'是':'否'}。</p><button onclick="decide('${r.id}','continue')">继续/改派</button><button class=secondary onclick="decide('${r.id}','change_handoff')">交回调度改时间</button>`).join('') : '<span class=muted>没有待处理的送电不足复核。</span>';
+}
+async function decide(id, decision) {
+  await request(`/api/reviews/dispatch/${id}/decision`,{method:'POST',body:{decision,at:at()}}); refresh(); msg('调度决定已记录');
+}
+async function requestChange() {
+  const body={booking:document.getElementById('change-booking').value,requested_handoff:document.getElementById('change-time').value,at:at()};
+  const data=await request('/api/changes',{method:'POST',body}); lastChangeId=data.id;
+  document.getElementById('change-result').value=pretty(data); msg(data.label_zh||'已评估');
+}
+async function confirmLastChange(choice) {
+  if(!lastChangeId) return msg('请先评估变更',true);
+  const body={choice,buyer_confirmed:true,at:at()};
+  const data=await request(`/api/changes/${lastChangeId}/confirm`,{method:'POST',body});
+  document.getElementById('change-result').value=pretty(data); msg('变更已确认并生成计划'); refresh();
+}
+async function evaluatePlans() {
+  const data=await request('/api/plans/evaluate',{method:'POST',body:{at:at()}});
+  document.getElementById('dispatch-result').textContent=pretty({feasible:data.feasible,max_finish_at:data.max_finish_at,jobs:data.jobs,port_changes:data.port_changes});
+}
+async function stopS12(){ const d=await request('/api/pile/sessions/S12/stop',{method:'POST',body:{at:at()}}); document.getElementById('pile-result').textContent=pretty(d); refresh(); }
+async function pollS12(){ const d=await request('/api/pile/sessions/S12/poll',{method:'POST',body:{at:at()}}); document.getElementById('pile-result').textContent=pretty(d); refresh(); }
+async function recordPayment(){
+  const vin=document.getElementById('pay-vin').value; let amount=document.getElementById('pay-amount').value;
+  if(amount!=='full') amount=Number(amount);
+  const d=await request('/api/payments',{method:'POST',body:{vin,amount_fen:amount,at:at()}}); document.getElementById('pay-result').textContent=pretty(d); refresh();
+}
+async function markPaid(){ const vin=document.getElementById('pay-vin').value; const d=await request(`/api/orders/${vin}/pay`,{method:'POST',body:{at:at()}}); document.getElementById('pay-result').textContent=pretty(d); refresh(); }
+async function settleSession(){ const session=document.getElementById('settle-session').value; const d=await request('/api/billing/settle',{method:'POST',body:{session,at:at()}}); document.getElementById('pay-result').textContent=pretty(d); refresh(); }
+async function sendGeneric(){
+  const method=document.getElementById('api-method').value; const path=document.getElementById('api-path').value;
+  let body=document.getElementById('api-body').value; body=body?JSON.parse(body):undefined;
+  const opt={method}; if(method!=='GET') opt.body=body||{};
+  try { const d=await request(path,opt); document.getElementById('generic-result').textContent=pretty(d); }
+  catch(e){ document.getElementById('generic-result').textContent=pretty(e); }
+}
+refresh();
+</script>
+</body>
+</html>
